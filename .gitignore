@@ -1,0 +1,11 @@
+node_modules/
+dist/
+electron/dist/
+release/
+data/
+*.log
+
+# Versão antiga (Next.js + Supabase + Docker) — contém credenciais, não versionar
+_legado-nuvem/
+.env
+.env.*
