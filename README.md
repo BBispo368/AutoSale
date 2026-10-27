@@ -9,16 +9,16 @@ Aplicativo Desktop 100% autônomo, local e independente para **Prospecção de E
 
 ## 🌟 O que a Aplicação Faz
 
-1. **Motor WhatsApp Nativo (Baileys Embutido)**:
+1. **WhatsApp Web Integrado**:
    - Sem necessidade de Docker ou Evolution API externa.
-   - Gera o QR Code direto na janela do programa.
-   - Reconexão automática e persistência de sessão local.
-   - Simulação de status "Digitando..." e delays humanizados anti-bloqueio.
+   - Abre o WhatsApp Web oficial numa janela do próprio programa para escanear o QR Code.
+   - Sessão salva no computador: ao abrir o app, a conexão é restaurada automaticamente em segundo plano.
+   - Delay humanizado antes de cada envio e intervalos aleatórios anti-bloqueio.
 
 2. **Buscador de Empresas (Prospector por Nicho & Região)**:
-   - Pesquisa estabelecimentos de qualquer ramo (ex: *Pizzarias, Academias, Clínicas Odontológicas, Oficinas, Imobiliárias, etc.*).
+   - Pesquisa estabelecimentos no Google Maps, de qualquer ramo (ex: *Pizzarias, Academias, Clínicas Odontológicas, Oficinas, Imobiliárias, etc.*).
    - Filtros por Nicho, Cidade e Estado (UF).
-   - Coleta telefones formatados para WhatsApp, nomes e endereços.
+   - Coleta nomes, telefones formatados para WhatsApp, endereços e sites.
    - Adiciona os contatos à base local em 1 clique.
 
 3. **Banco de Dados Local (Offline)**:
@@ -63,7 +63,7 @@ Para criar o instalador executável do Windows para distribuir para seus cliente
 npm run dist
 ```
 
-O instalador pronto (`AutoSale Setup.exe`) será gerado na pasta:
+O instalador pronto (`AutoSale Setup 1.0.0.exe`) será gerado na pasta:
 ```
 release/
 ```

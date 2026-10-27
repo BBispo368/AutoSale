@@ -52,6 +52,9 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    // A janela oculta do WhatsApp manteria o processo vivo (e a trava de instância
+    // única impediria reabrir o app), então fechar a janela principal encerra tudo
+    app.quit();
   });
 
   // Configura listeners de eventos do WhatsApp para enviar à janela
@@ -78,6 +81,8 @@ if (!gotTheLock) {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
+    } else if (app.isReady()) {
+      createWindow();
     }
   });
 
@@ -85,19 +90,24 @@ if (!gotTheLock) {
     registerIpcHandlers();
     createWindow();
 
+    // Reconecta automaticamente se houver sessão do WhatsApp salva
+    whatsappManager.init({ background: true });
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   });
 }
 
+app.on('before-quit', () => {
+  // Devolve leads "em processamento" para pendentes antes de sair
+  if (campaignDispatcher.getStatus().isRunning) campaignDispatcher.stop();
+  whatsappManager.shutdown();
+});
+
 app.on('window-all-closed', () => {
-  // Só fecha o app se a janela principal foi destruída
-  // A janela do WhatsApp pode ser fechada/ocultada sem encerrar o app
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    if (process.platform !== 'darwin') {
-      app.quit();
-    }
+  if (process.platform !== 'darwin') {
+    app.quit();
   }
 });
 

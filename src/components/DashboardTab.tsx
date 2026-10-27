@@ -60,7 +60,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onShowToast, onNavig
       const unsubWA = window.electronAPI.whatsapp.onStatusChange((data) => {
         setWaStatus(data.status);
         setQrCode(data.qrCode);
-        if (data.status === 'connected') {
+        if (data.status === 'connected' || data.status === 'disconnected') {
           setLoadingQr(false);
         }
       });
@@ -112,7 +112,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onShowToast, onNavig
     setLoadingQr(true);
     try {
       await window.electronAPI.whatsapp.connect();
-      onShowToast('success', 'Gerando QR Code... Aponte o WhatsApp do aparelho.');
+      onShowToast('success', 'Escaneie o QR Code na janela do WhatsApp que abriu.');
     } catch {
       onShowToast('error', 'Falha ao iniciar conexão com WhatsApp.');
       setLoadingQr(false);
@@ -337,7 +337,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onShowToast, onNavig
                 <div>
                   <p className="font-bold text-emerald-300 text-sm">WhatsApp Autenticado</p>
                   <p className="text-xs text-slate-400 mt-1 px-4">
-                    Motor Baileys conectado localmente. Pronto para realizar disparos automáticos.
+                    Sessão do WhatsApp Web ativa neste computador. Pronto para realizar disparos automáticos.
                   </p>
                 </div>
                 <button
@@ -353,10 +353,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onShowToast, onNavig
                   <div className="p-3 bg-white rounded-2xl shadow-2xl mb-4 border border-slate-300 animate-in fade-in zoom-in-95">
                     <img src={qrCode} alt="WhatsApp QR Code" className="w-48 h-48 object-contain" />
                   </div>
+                ) : waStatus === 'connecting' && !loadingQr ? (
+                  <div className="text-center py-8 text-slate-400 text-xs px-2">
+                    <p className="mb-2">Restaurando sessão salva...</p>
+                    <p>Se não houver sessão, você poderá conectar escaneando o QR Code.</p>
+                  </div>
                 ) : (
                   <div className="text-center py-8 text-slate-400 text-xs px-2">
                     <p className="mb-2">Sem conexão ativa.</p>
-                    <p>Clique abaixo para gerar o QR Code e escanear com seu celular.</p>
+                    <p>Clique abaixo para abrir o WhatsApp Web e escanear o QR Code com seu celular.</p>
                   </div>
                 )}
 
@@ -366,7 +371,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onShowToast, onNavig
                   className="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold py-2.5 rounded-xl border border-slate-700 transition active:scale-95 text-xs flex items-center justify-center gap-2"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${loadingQr ? 'animate-spin' : ''}`} />
-                  {loadingQr ? 'Gerando QR Code...' : qrCode ? 'Regerar QR Code' : 'Conectar WhatsApp'}
+                  {loadingQr ? 'Aguardando leitura do QR Code...' : qrCode ? 'Regerar QR Code' : 'Conectar WhatsApp'}
                 </button>
               </div>
             )}
