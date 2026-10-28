@@ -15,19 +15,40 @@ import {
   X,
   Save,
   RotateCcw,
+  Globe,
 } from 'lucide-react';
-import { Lead } from '../types/electron';
+import { Lead, LeadStatus, EditableLeadFields } from '../types/electron';
+import type { ShowToast } from './toast';
+import { describeLeadsAdded } from './formatters';
+import { useConfirm } from './ConfirmDialog';
 
 interface LeadsTabProps {
-  onShowToast: (type: 'success' | 'error', message: string) => void;
+  onShowToast: ShowToast;
 }
 
-const STATUS_OPTIONS: { value: Lead['status']; label: string }[] = [
+const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'pending', label: 'Pendente' },
   { value: 'sent', label: 'Enviado' },
   { value: 'failed', label: 'Falhou' },
   { value: 'replied', label: 'Respondeu' },
 ];
+
+const STATUS_FILTERS: { id: LeadStatus | 'all'; label: string }[] = [
+  { id: 'all', label: 'Todos' },
+  { id: 'pending', label: 'Pendentes' },
+  { id: 'sent', label: 'Enviados' },
+  { id: 'failed', label: 'Falhas' },
+  { id: 'replied', label: 'Responderam' },
+];
+
+// Rótulo usado na confirmação de "Limpar Leads" por status
+const STATUS_LABELS: Record<LeadStatus, string> = {
+  pending: 'Pendente',
+  processing: 'Enviando',
+  sent: 'Enviado',
+  failed: 'Falhou',
+  replied: 'Respondeu',
+};
 
 function StatusBadge({ status }: { status: Lead['status'] }) {
   switch (status) {
@@ -73,7 +94,7 @@ function StatusBadge({ status }: { status: Lead['status'] }) {
 // ─── Modal de edição ────────────────────────────────────────────────────────
 interface EditModalProps {
   lead: Lead;
-  onSave: (updated: Partial<Lead>) => Promise<void>;
+  onSave: (updated: EditableLeadFields) => Promise<void>;
   onClose: () => void;
 }
 
@@ -84,28 +105,31 @@ function EditModal({ lead, onSave, onClose }: EditModalProps) {
     business_type: lead.business_type || '',
     city: lead.city || '',
     address: lead.address || '',
+    website: lead.website || '',
     status: lead.status,
-    error_message: lead.error_message || '',
   });
   const [saving, setSaving] = useState(false);
 
-  const handleChange = (field: string, value: string) => {
+  const handleChange = <K extends keyof typeof form>(field: K, value: (typeof form)[K]) => {
     setForm((p) => ({ ...p, [field]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await onSave({
-      name: form.name.trim(),
-      phone: form.phone.trim().replace(/\D/g, ''),
-      business_type: form.business_type.trim(),
-      city: form.city.trim(),
-      address: form.address.trim(),
-      status: form.status as Lead['status'],
-      error_message: form.status === 'failed' ? form.error_message : null,
-    });
-    setSaving(false);
+    try {
+      await onSave({
+        name: form.name.trim(),
+        phone: form.phone.trim().replace(/\D/g, ''),
+        business_type: form.business_type.trim(),
+        city: form.city.trim(),
+        address: form.address.trim(),
+        website: form.website.trim(),
+        status: form.status,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -174,6 +198,19 @@ function EditModal({ lead, onSave, onClose }: EditModalProps) {
               />
             </div>
 
+            <div className="col-span-2">
+              <label className="block text-xs text-slate-400 mb-1">Site</label>
+              <div className="relative">
+                <Globe className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                <input
+                  value={form.website}
+                  onChange={(e) => handleChange('website', e.target.value)}
+                  placeholder="https://..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-cyan-300 focus:outline-none focus:border-purple-500 placeholder:text-slate-600"
+                />
+              </div>
+            </div>
+
             {/* Status selector */}
             <div className="col-span-2">
               <label className="block text-xs text-slate-400 mb-1">Status</label>
@@ -195,17 +232,13 @@ function EditModal({ lead, onSave, onClose }: EditModalProps) {
               </div>
             </div>
 
-            {/* Campo de erro — só aparece quando status = failed */}
-            {form.status === 'failed' && (
+            {/* Motivo da falha registrado no envio (somente leitura: o contrato não permite editá-lo) */}
+            {form.status === 'failed' && lead.error_message && (
               <div className="col-span-2">
-                <label className="block text-xs text-rose-400 mb-1">Motivo do erro / observação</label>
-                <textarea
-                  value={form.error_message}
-                  onChange={(e) => handleChange('error_message', e.target.value)}
-                  rows={2}
-                  className="w-full bg-slate-950 border border-rose-800/50 rounded-xl px-3 py-2 text-xs text-rose-300 focus:outline-none focus:border-rose-500 resize-none"
-                  placeholder="Descreva o motivo da falha..."
-                />
+                <label className="block text-xs text-rose-400 mb-1">Motivo do erro</label>
+                <p className="w-full bg-slate-950 border border-rose-800/50 rounded-xl px-3 py-2 text-xs text-rose-300">
+                  {lead.error_message}
+                </p>
               </div>
             )}
           </div>
@@ -239,10 +272,11 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({ onShowToast }) => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const loadLeads = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -267,7 +301,12 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({ onShowToast }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Deseja realmente remover este lead?')) return;
+    const confirmed = await confirm({
+      title: 'Remover lead',
+      message: 'Deseja realmente remover este lead? Esta ação não pode ser desfeita.',
+      confirmLabel: 'Remover',
+    });
+    if (!confirmed) return;
     try {
       await window.electronAPI.leads.deleteLead(id);
       onShowToast('success', 'Lead removido com sucesso.');
@@ -278,24 +317,28 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({ onShowToast }) => {
   };
 
   const handleResetFailed = async () => {
-    const failedLeads = leads.filter((l) => l.status === 'failed');
-    if (failedLeads.length === 0) {
-      onShowToast('error', 'Nenhum lead com falha para redefinir.');
-      return;
-    }
-    if (!confirm(`Redefinir ${failedLeads.length} lead(s) com falha para "Pendente"?`)) return;
+    // A redefinição vale para todos os leads com falha da base, não só para os exibidos na tela
+    const confirmed = await confirm({
+      title: 'Reenviar falhas',
+      message: 'Todos os leads com falha voltarão para "Pendente" e entrarão na fila do próximo disparo. Deseja continuar?',
+      confirmLabel: 'Redefinir',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
-      await Promise.all(
-        failedLeads.map((l) => window.electronAPI.leads.updateLead(l.id, { status: 'pending' }))
-      );
-      onShowToast('success', `${failedLeads.length} lead(s) redefinidos para pendente!`);
+      const { count } = await window.electronAPI.leads.resetFailed();
+      if (count === 0) {
+        onShowToast('info', 'Nenhum lead com falha para redefinir.');
+      } else {
+        onShowToast('success', `${count} lead(s) redefinidos para pendente!`);
+      }
       loadLeads();
     } catch {
       onShowToast('error', 'Erro ao redefinir leads.');
     }
   };
 
-  const handleSaveEdit = async (updated: Partial<Lead>) => {
+  const handleSaveEdit = async (updated: EditableLeadFields) => {
     if (!editingLead) return;
     try {
       await window.electronAPI.leads.updateLead(editingLead.id, updated);
@@ -308,11 +351,12 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({ onShowToast }) => {
   };
 
   const handleClearAll = async () => {
-    const msg =
+    const message =
       statusFilter === 'all'
-        ? 'Deseja excluir TODOS os leads da base de dados local?'
-        : `Deseja excluir todos os leads com status "${statusFilter}"?`;
-    if (!confirm(msg)) return;
+        ? 'Deseja excluir TODOS os leads da base de dados local? Esta ação não pode ser desfeita.'
+        : `Deseja excluir todos os leads com status "${STATUS_LABELS[statusFilter]}"? Esta ação não pode ser desfeita.`;
+    const confirmed = await confirm({ title: 'Limpar leads', message, confirmLabel: 'Excluir' });
+    if (!confirmed) return;
     try {
       await window.electronAPI.leads.clearLeads(statusFilter);
       onShowToast('success', 'Base de leads limpa com sucesso.');
@@ -343,7 +387,10 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({ onShowToast }) => {
     try {
       const res = await window.electronAPI.leads.importFile();
       if (res.success) {
-        onShowToast('success', `${res.added} leads importados! (${res.duplicates} duplicados ignorados)`);
+        onShowToast(
+          'success',
+          describeLeadsAdded(res.added ?? 0, res.duplicates ?? 0, res.invalid ?? 0, 'leads importados')
+        );
         loadLeads();
       } else if (!res.canceled) {
         onShowToast('error', res.error || 'Erro ao importar planilha.');
@@ -359,6 +406,8 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({ onShowToast }) => {
 
   return (
     <>
+      {confirmDialog}
+
       {/* Modal de edição */}
       {editingLead && (
         <EditModal
@@ -426,13 +475,7 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({ onShowToast }) => {
           {/* Filtros */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800">
             <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-              {[
-                { id: 'all', label: 'Todos' },
-                { id: 'pending', label: 'Pendentes' },
-                { id: 'sent', label: 'Enviados' },
-                { id: 'failed', label: 'Falhas' },
-                { id: 'replied', label: 'Responderam' },
-              ].map((tab) => (
+              {STATUS_FILTERS.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setStatusFilter(tab.id)}
@@ -498,6 +541,15 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({ onShowToast }) => {
                           <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                           <span>{lead.name}</span>
                         </div>
+                        {lead.website && (
+                          <div
+                            className="flex items-center gap-1.5 mt-0.5 ml-5 text-[10px] font-normal text-slate-500 max-w-[220px]"
+                            title={lead.website}
+                          >
+                            <Globe className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{lead.website}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 font-mono text-emerald-400">{lead.phone}</td>
                       <td className="py-3 px-4 text-slate-400">

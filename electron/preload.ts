@@ -1,66 +1,63 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import type { IElectronAPI } from './types';
 
-contextBridge.exposeInMainWorld('electronAPI', {
-  // WhatsApp
+/** Assina um canal de eventos do processo principal e devolve a função de cancelamento */
+function subscribe<T>(channel: string, callback: (data: T) => void) {
+  const listener = (_: IpcRendererEvent, data: T) => callback(data);
+  ipcRenderer.on(channel, listener);
+  return () => {
+    ipcRenderer.removeListener(channel, listener);
+  };
+}
+
+const api: IElectronAPI = {
+  app: {
+    getInfo: () => ipcRenderer.invoke('app:get-info'),
+  },
+
   whatsapp: {
     getStatus: () => ipcRenderer.invoke('whatsapp:get-status'),
     connect: () => ipcRenderer.invoke('whatsapp:connect'),
     disconnect: () => ipcRenderer.invoke('whatsapp:disconnect'),
-    onStatusChange: (callback: (data: { status: string; qrCode: string | null }) => void) => {
-      const listener = (_: any, data: any) => callback(data);
-      ipcRenderer.on('whatsapp:status-update', listener);
-      return () => ipcRenderer.removeListener('whatsapp:status-update', listener);
-    },
+    onStatusChange: (callback) => subscribe('whatsapp:status-update', callback),
   },
 
-  // Leads
   leads: {
-    getLeads: (filter?: { status?: string; search?: string }) =>
-      ipcRenderer.invoke('leads:get-all', filter),
-    addLeads: (leads: any[]) => ipcRenderer.invoke('leads:add', leads),
-    deleteLead: (id: string) => ipcRenderer.invoke('leads:delete', id),
-    updateLead: (id: string, fields: any) => ipcRenderer.invoke('leads:update', id, fields),
-    clearLeads: (statusFilter?: string) => ipcRenderer.invoke('leads:clear', statusFilter),
+    getLeads: (filter) => ipcRenderer.invoke('leads:get-all', filter),
+    addLeads: (leads) => ipcRenderer.invoke('leads:add', leads),
+    deleteLead: (id) => ipcRenderer.invoke('leads:delete', id),
+    updateLead: (id, fields) => ipcRenderer.invoke('leads:update', id, fields),
+    resetFailed: () => ipcRenderer.invoke('leads:reset-failed'),
+    clearLeads: (statusFilter) => ipcRenderer.invoke('leads:clear', statusFilter),
     getStats: () => ipcRenderer.invoke('leads:get-stats'),
     exportExcel: () => ipcRenderer.invoke('leads:export-excel'),
     importFile: () => ipcRenderer.invoke('leads:import-file'),
-
   },
 
-  // Settings
   settings: {
     getSettings: () => ipcRenderer.invoke('settings:get'),
-    saveSettings: (settings: any) => ipcRenderer.invoke('settings:save', settings),
+    saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   },
 
-  // Scraper de Empresas
   scraper: {
-    searchLeads: (filters: { niche: string; city: string; state: string; limit?: number }) =>
-      ipcRenderer.invoke('scraper:search', filters),
-    onProgress: (callback: (data: { found: number; currentName: string }) => void) => {
-      const listener = (_: any, data: any) => callback(data);
-      ipcRenderer.on('scraper:progress', listener);
-      return () => ipcRenderer.removeListener('scraper:progress', listener);
-    },
+    searchLeads: (filters) => ipcRenderer.invoke('scraper:search', filters),
+    cancel: () => ipcRenderer.invoke('scraper:cancel'),
+    onProgress: (callback) => subscribe('scraper:progress', callback),
   },
 
-  // Disparador de Campanha
   campaign: {
     start: () => ipcRenderer.invoke('campaign:start'),
     pause: () => ipcRenderer.invoke('campaign:pause'),
     resume: () => ipcRenderer.invoke('campaign:resume'),
     stop: () => ipcRenderer.invoke('campaign:stop'),
     getStatus: () => ipcRenderer.invoke('campaign:get-status'),
-    onProgress: (callback: (progress: any) => void) => {
-      const listener = (_: any, data: any) => callback(data);
-      ipcRenderer.on('campaign:progress', listener);
-      return () => ipcRenderer.removeListener('campaign:progress', listener);
-    },
+    onProgress: (callback) => subscribe('campaign:progress', callback),
   },
 
-  // Logs
   logs: {
     getLogs: () => ipcRenderer.invoke('logs:get'),
     clearLogs: () => ipcRenderer.invoke('logs:clear'),
   },
-});
+};
+
+contextBridge.exposeInMainWorld('electronAPI', api);

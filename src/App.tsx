@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Zap,
   LayoutDashboard,
@@ -7,6 +7,7 @@ import {
   Terminal,
   CheckCircle2,
   AlertCircle,
+  Info,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -14,50 +15,73 @@ import { DashboardTab } from './components/DashboardTab';
 import { ProspectorTab } from './components/ProspectorTab';
 import { LeadsTab } from './components/LeadsTab';
 import { LogsTab } from './components/LogsTab';
+import type { ShowToast, ToastType } from './components/toast';
+import type { WhatsAppStatus } from './types/electron';
+
+type TabId = 'dashboard' | 'prospector' | 'leads' | 'logs';
+
+const TOAST_DURATION_MS = 4500;
+
+const TOAST_STYLES: Record<ToastType, string> = {
+  success: 'bg-emerald-950/95 border-emerald-500/60 text-emerald-200',
+  error: 'bg-rose-950/95 border-rose-500/60 text-rose-200',
+  info: 'bg-cyan-950/95 border-cyan-500/60 text-cyan-200',
+};
+
+const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: 'dashboard', label: 'Painel & Disparos', icon: LayoutDashboard },
+  { id: 'prospector', label: 'Buscar Empresas', icon: Search },
+  { id: 'leads', label: 'Base de Leads', icon: Users },
+  { id: 'logs', label: 'Logs & Atividade', icon: Terminal },
+];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'prospector' | 'leads' | 'logs'>('dashboard');
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [waStatus, setWaStatus] = useState<string>('disconnected');
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [notification, setNotification] = useState<{ type: ToastType; message: string } | null>(null);
+  const [waStatus, setWaStatus] = useState<WhatsAppStatus>('disconnected');
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (window.electronAPI) {
-      window.electronAPI.whatsapp.getStatus().then((res) => setWaStatus(res.status));
+      window.electronAPI.whatsapp.getStatus().then((res) => setWaStatus(res.status)).catch(console.error);
+      window.electronAPI.app.getInfo().then((info) => setAppVersion(info.version)).catch(console.error);
       const unsub = window.electronAPI.whatsapp.onStatusChange((data) => setWaStatus(data.status));
       return () => unsub();
     }
   }, []);
 
-  const showToast = (type: 'success' | 'error', message: string) => {
-    setNotification({ type, message });
-    setTimeout(() => {
-      setNotification(null);
-    }, 4500);
-  };
+  // Limpa o timer pendente ao desmontar
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
-  const navItems = [
-    { id: 'dashboard', label: 'Painel & Disparos', icon: LayoutDashboard },
-    { id: 'prospector', label: 'Buscar Empresas', icon: Search },
-    { id: 'leads', label: 'Base de Leads', icon: Users },
-    { id: 'logs', label: 'Logs & Atividade', icon: Terminal },
-  ];
+  // Identidade estável (as abas usam em useCallback) e timer único: um toast novo cancela o anterior
+  const showToast = useCallback<ShowToast>((type, message) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setNotification({ type, message });
+    toastTimerRef.current = setTimeout(() => {
+      setNotification(null);
+      toastTimerRef.current = null;
+    }, TOAST_DURATION_MS);
+  }, []);
+
+  const ToastIcon = notification?.type === 'success' ? CheckCircle2 : notification?.type === 'info' ? Info : AlertCircle;
+  const toastIconColor =
+    notification?.type === 'success' ? 'text-emerald-400' : notification?.type === 'info' ? 'text-cyan-400' : 'text-rose-400';
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
       {/* Toast Notification */}
       {notification && (
         <div
           className={`fixed bottom-6 right-6 px-5 py-3.5 rounded-2xl border flex items-center gap-3 shadow-2xl z-50 transition-all animate-in fade-in slide-in-from-bottom-5 ${
-            notification.type === 'success'
-              ? 'bg-emerald-950/95 border-emerald-500/60 text-emerald-200'
-              : 'bg-rose-950/95 border-rose-500/60 text-rose-200'
+            TOAST_STYLES[notification.type]
           }`}
         >
-          {notification.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-          )}
+          <ToastIcon className={`w-5 h-5 shrink-0 ${toastIconColor}`} />
           <span className="text-xs md:text-sm font-semibold">{notification.message}</span>
         </div>
       )}
@@ -75,20 +99,20 @@ export default function App() {
                 AutoSale
               </h1>
               <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                Desktop v1.0
+                Desktop{appVersion ? ` v${appVersion}` : ''}
               </span>
             </div>
           </div>
 
           {/* Navegação de Abas */}
           <nav className="space-y-1.5">
-            {navItems.map((item) => {
+            {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id as any)}
+                  onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                     isActive
                       ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/40'
@@ -125,7 +149,7 @@ export default function App() {
 
             <div className="text-[10px] text-slate-400 border-t border-slate-800/60 pt-2 flex items-center justify-between">
               <span>Armazenamento:</span>
-              <span className="font-semibold text-cyan-400">100% Offline (SQLite)</span>
+              <span className="font-semibold text-cyan-400">Dados locais</span>
             </div>
           </div>
         </div>
@@ -137,7 +161,7 @@ export default function App() {
         <header className="h-14 border-b border-slate-800/80 bg-slate-950/60 px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-bold text-slate-200">
-              {navItems.find((n) => n.id === activeTab)?.label}
+              {NAV_ITEMS.find((n) => n.id === activeTab)?.label}
             </h2>
           </div>
 

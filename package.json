@@ -11,7 +11,9 @@
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && npm run build:electron && electron . --dev\"",
     "start": "npm run build && electron .",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit"
   },
   "keywords": [
     "prospeccao",
@@ -23,12 +25,13 @@
   "author": "Breno",
   "license": "ISC",
   "dependencies": {
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.5.5",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -43,6 +46,7 @@
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
+    "vitest": "^5.0.5",
     "wait-on": "^8.0.1"
   },
   "build": {

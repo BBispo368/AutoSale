@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, Trash2, RefreshCw, AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react';
 import { AppLog } from '../types/electron';
+import type { ShowToast } from './toast';
+import { formatLogTimestamp } from './formatters';
 
 interface LogsTabProps {
-  onShowToast: (type: 'success' | 'error', message: string) => void;
+  onShowToast: ShowToast;
 }
 
 export const LogsTab: React.FC<LogsTabProps> = ({ onShowToast }) => {
@@ -95,7 +97,7 @@ export const LogsTab: React.FC<LogsTabProps> = ({ onShowToast }) => {
                 key={log.id}
                 className="flex items-start gap-2.5 py-1 px-2 rounded hover:bg-slate-900/60 transition"
               >
-                <span className="text-slate-500 text-[11px] select-none">[{log.timestamp}]</span>
+                <span className="text-slate-500 text-[11px] select-none">[{formatLogTimestamp(log.timestamp)}]</span>
                 <span className="mt-0.5">{getLogIcon(log.type)}</span>
                 <span
                   className={`text-[12px] leading-relaxed ${

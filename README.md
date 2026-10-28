@@ -29,7 +29,10 @@ Aplicativo Desktop 100% autônomo, local e independente para **Prospecção de E
 
 4. **Disparador Inteligente**:
    - Mensagens com tags dinâmicas: `{nome_empresa}`, `{cidade}`, `{ramo}`, `{telefone}`.
+   - Spintax para variar o texto a cada envio: `{Olá|Oi|Bom dia}` sorteia uma das opções.
    - Delays aleatórios configuráveis (ex: entre 20 e 50 segundos entre envios).
+   - Limite diário de mensagens e janela de horário de envio (ex: das 8h às 20h).
+   - Confirma o envio de cada mensagem e detecta números sem WhatsApp e sessão expirada.
    - Barra de progresso ao vivo, botões de Pausar, Retomar e Interromper.
 
 ---
@@ -52,6 +55,18 @@ Para desenvolvimento com Live Reload:
 ```bash
 npm run electron:dev
 ```
+
+Testes e checagem de tipos:
+```bash
+npm test
+npm run typecheck
+```
+
+A renderização usa a CPU por padrão (evita tela preta em drivers de vídeo incompatíveis).
+Em máquinas com GPU funcionando, abra com `--enable-gpu` ou defina `AUTOSALE_ENABLE_GPU=1`.
+
+Os dados ficam em `%APPDATA%utosale-desktoputosale_database.json`. Se o arquivo for
+corrompido, ele é preservado como `autosale_database.corrompido-<data>.json` e uma base nova é criada.
 
 ---
 

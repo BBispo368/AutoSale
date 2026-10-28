@@ -3,18 +3,21 @@ import {
   Search,
   Building2,
   MapPin,
-  Phone,
-  CheckCircle,
   Plus,
   Loader2,
   Filter,
   CheckSquare,
   Square,
   Sparkles,
+  Globe,
+  XCircle,
 } from 'lucide-react';
+import type { ScrapedLead } from '../types/electron';
+import type { ShowToast } from './toast';
+import { describeLeadsAdded } from './formatters';
 
 interface ProspectorTabProps {
-  onShowToast: (type: 'success' | 'error', message: string) => void;
+  onShowToast: ShowToast;
   onLeadsAdded: () => void;
 }
 
@@ -30,7 +33,9 @@ export const ProspectorTab: React.FC<ProspectorTabProps> = ({ onShowToast, onLea
     currentName: '',
   });
 
-  const [foundLeads, setFoundLeads] = useState<any[]>([]);
+  const [isCanceling, setIsCanceling] = useState(false);
+
+  const [foundLeads, setFoundLeads] = useState<ScrapedLead[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
 
@@ -77,26 +82,48 @@ export const ProspectorTab: React.FC<ProspectorTabProps> = ({ onShowToast, onLea
     setSelectedIndices(new Set());
 
     try {
-      const results = await window.electronAPI.scraper.searchLeads({
+      const res = await window.electronAPI.scraper.searchLeads({
         niche: niche.trim(),
         city: city.trim(),
         state,
         limit,
       });
 
+      // Mesmo cancelada ou com erro, a busca pode trazer resultados parciais
+      const results = res.results ?? [];
       setFoundLeads(results);
       // Seleciona todos por padrão
       setSelectedIndices(new Set(results.map((_, i) => i)));
 
-      if (results.length > 0) {
+      if (res.canceled) {
+        onShowToast(
+          'info',
+          results.length > 0
+            ? `Busca cancelada. ${results.length} empresas já encontradas foram mantidas na lista.`
+            : 'Busca cancelada.'
+        );
+      } else if (!res.success) {
+        onShowToast('error', res.error || 'Falha na pesquisa de empresas.');
+      } else if (results.length > 0) {
         onShowToast('success', `${results.length} empresas encontradas com telefone!`);
       } else {
         onShowToast('error', 'Nenhuma empresa encontrada com telefone para estes critérios.');
       }
-    } catch (err: any) {
+    } catch {
       onShowToast('error', 'Falha na pesquisa de empresas.');
     } finally {
       setIsSearching(false);
+      setIsCanceling(false);
+    }
+  };
+
+  const handleCancelSearch = async () => {
+    setIsCanceling(true);
+    try {
+      await window.electronAPI.scraper.cancel();
+    } catch {
+      setIsCanceling(false);
+      onShowToast('error', 'Não foi possível cancelar a busca.');
     }
   };
 
@@ -126,13 +153,11 @@ export const ProspectorTab: React.FC<ProspectorTabProps> = ({ onShowToast, onLea
 
     setIsSaving(true);
     try {
+      // ScrapedLead já carrega o site, que segue junto para a base
       const toSave = Array.from(selectedIndices).map((idx) => foundLeads[idx]);
       const res = await window.electronAPI.leads.addLeads(toSave);
 
-      onShowToast(
-        'success',
-        `${res.added} novos leads salvos! (${res.duplicates} duplicados ignorados)`
-      );
+      onShowToast('success', describeLeadsAdded(res.added, res.duplicates, res.invalid, 'novos leads salvos'));
       onLeadsAdded();
 
       // Remove os salvos da lista ou limpa
@@ -162,7 +187,7 @@ export const ProspectorTab: React.FC<ProspectorTabProps> = ({ onShowToast, onLea
 
           <div className="flex items-center gap-2">
             <span className="text-xs bg-cyan-950/40 text-cyan-300 border border-cyan-800/50 px-3 py-1 rounded-full flex items-center gap-1.5 font-medium">
-              <Sparkles className="w-3.5 h-3.5" /> Busca 100% Local
+              <Sparkles className="w-3.5 h-3.5" /> Sem API paga
             </span>
           </div>
         </div>
@@ -252,7 +277,18 @@ export const ProspectorTab: React.FC<ProspectorTabProps> = ({ onShowToast, onLea
           </div>
 
           {/* Botão de Busca */}
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end items-center gap-3 pt-2">
+            {isSearching && (
+              <button
+                type="button"
+                onClick={handleCancelSearch}
+                disabled={isCanceling}
+                className="flex items-center gap-2 bg-rose-900/60 hover:bg-rose-800 disabled:opacity-50 text-rose-200 font-semibold px-5 py-2.5 rounded-xl border border-rose-700/50 transition active:scale-95 text-xs"
+              >
+                <XCircle className="w-4 h-4" />
+                <span>{isCanceling ? 'Cancelando...' : 'Cancelar busca'}</span>
+              </button>
+            )}
             <button
               type="submit"
               disabled={isSearching}
@@ -358,9 +394,20 @@ export const ProspectorTab: React.FC<ProspectorTabProps> = ({ onShowToast, onLea
                           <Square className="w-4 h-4 text-slate-600" />
                         )}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-100 flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>{item.name}</span>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2 font-semibold text-slate-100">
+                          <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{item.name}</span>
+                        </div>
+                        {item.website && (
+                          <div
+                            className="flex items-center gap-1.5 mt-0.5 ml-5 text-[11px] text-cyan-400/80 max-w-xs"
+                            title={item.website}
+                          >
+                            <Globe className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{item.website}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 font-mono text-emerald-400">
                         {item.phone}

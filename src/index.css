@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body {
+    font-family: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: #334155 #0f172a;
