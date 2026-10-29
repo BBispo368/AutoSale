@@ -5,6 +5,14 @@ Aplicativo Desktop 100% autônomo, local e independente para **Prospecção de E
 > **Zero Nuvem. Zero Docker. Zero Mensalidades.**  
 > O código, os dados e o WhatsApp rodam diretamente no computador do cliente, com controle total e privacidade.
 
+## ⬇️ Download
+
+**[Baixar o instalador do AutoSale para Windows](https://github.com/BBispo368/AutoSale/raw/main/instalador/AutoSale-Setup-1.0.0.exe)** (pasta [`instalador/`](instalador/))
+
+1. Baixe e abra o arquivo `AutoSale-Setup-1.0.0.exe`.
+2. Se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações → Executar assim mesmo** (o instalador ainda não tem assinatura digital).
+3. Ao abrir o AutoSale, conecte o WhatsApp lendo o QR Code com o celular.
+
 ---
 
 ## 🌟 O que a Aplicação Faz
